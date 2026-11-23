@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web GIS - Wilayah Flores Timur</title>
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+    <style>
+        html, body, #map {
+            height: 100%;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* Simbol Pin Lokasi */
+        .pin-wrapper {
+            background: transparent;
+            border: none;
+        }
+
+        .pin {
+            width: 18px;
+            height: 18px;
+            border-radius: 50% 50% 50% 0;
+            transform: rotate(-45deg);
+            border: 2px solid #ffffff;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Kotak Legenda */
+        .legend {
+            background: #ffffff;
+            border-radius: 6px;
+            box-shadow: 0 1px 5px rgba(0, 0, 0, 0.4);
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+            min-width: 170px;
+            overflow: hidden;
+        }
+
+        .legend-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 7px 10px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #dddddd;
+            font-weight: bold;
+            color: #2c3e50;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .legend-head:hover {
+            background: #eef1f5;
+        }
+
+        .legend-body {
+            padding: 8px 10px;
+            max-height: 260px;
+            overflow-y: auto;
+        }
+
+        .legend-body.hide {
+            display: none;
+        }
+
+        .legend-body h4 {
+            margin: 8px 0 5px 0;
+            padding-bottom: 2px;
+            font-size: 12px;
+            color: #2c3e50;
+            border-bottom: 1px solid #eeeeee;
+        }
+
+        .legend-body h4:first-child {
+            margin-top: 0;
+        }
+
+        .legend-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 5px;
+            font-size: 11px;
+        }
+
+        .dot {
+            width: 11px;
+            height: 11px;
+            border-radius: 50%;
+            display: inline-block;
+            border: 1px solid #ffffff;
+            box-shadow: 0 0 2px #000000;
+            flex-shrink: 0;
+        }
+
+        /* Tabel Popup */
+        .popup-table {
+            border-collapse: collapse;
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+        }
+
+        .popup-table td {
+            padding: 3px 5px;
+            vertical-align: top;
+        }
+
+        .popup-table td:first-child {
+            font-weight: bold;
+            color: #2c3e50;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="map"></div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <script>
+        // 1. Inisialisasi Peta & Basemap
+        var map = L.map("map").setView([-8.35, 122.98], 10);
+
+        var osm = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            maxZoom: 19,
+            attribution: "&copy; OpenStreetMap contributors"
+        }).addTo(map);
+
+        var sat = L.tileLayer("https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}", {
+            maxZoom: 20,
+            subdomains: ["mt0", "mt1", "mt2", "mt3"],
+            attribution: "&copy; Google"
+        });
+
+        // 2. Layer WMS dari GeoServer Lokal
+        var gsUrl = "http://localhost:8080/geoserver/wms";
+
+        var wmsDesa = L.tileLayer.wms(gsUrl, {
+            layers: "pgweb_acara11:batas_desa_flores",
+            format: "image/png",
+            transparent: true,
+            version: "1.1.1",
+            zIndex: 2
+        });
+
+        var wmsKec = L.tileLayer.wms(gsUrl, {
+            layers: "pgweb_acara11:batas_kecamatan_flores",
+            format: "image/png",
+            transparent: true,
+            version: "1.1.1",
+            zIndex: 3
+        }).addTo(map);
+
+        // 3. Data & Layer Titik Lokasi Penting
+        var warnaKategori = {
+            "Ibu Kota Kabupaten": "#e67e22",
+            "Bandar Udara": "#2980b9",
+            "Pelabuhan": "#16a085",
+            "Pusat Kecamatan": "#c0392b"
+        };
+
+        var titikData = [
+            ["Pusat Kota Larantuka", "Larantuka", "Ibu Kota Kabupaten", -8.3405, 122.9845],
+            ["Bandara Gewayantana", "Ile Mandiri", "Bandar Udara", -8.3131, 123.0006],
+            ["Pelabuhan Laut Larantuka", "Larantuka", "Pelabuhan", -8.3489, 122.9768],
+            ["Pelabuhan Menanga", "Solor Timur", "Pelabuhan", -8.4368, 123.0812],
+            ["Pelabuhan Waiwerang", "Adonara Timur", "Pelabuhan", -8.3895, 123.1642],
+            ["Kantor Camat Tanjung Bunga", "Tanjung Bunga", "Pusat Kecamatan", -8.1745, 122.8421],
+            ["Kantor Camat Wulanggitang", "Wulanggitang", "Pusat Kecamatan", -8.4812, 122.7354],
+            ["Kantor Camat Solor Barat", "Solor Barat", "Pusat Kecamatan", -8.4852, 122.9918],
+            ["Kantor Camat Adonara Barat", "Adonara Barat", "Pusat Kecamatan", -8.3412, 123.0685],
+            ["Kantor Camat Witihama", "Witihama", "Pusat Kecamatan", -8.3085, 123.2612]
+        ];
+
+        var layerTitik = L.layerGroup().addTo(map);
+
+        titikData.forEach(function (item) {
+            var nama = item[0];
+            var kecamatan = item[1];
+            var kategori = item[2];
+            var lat = item[3];
+            var lng = item[4];
+
+            var iconPin = L.divIcon({
+                className: "pin-wrapper",
+                html: '<div class="pin" style="background:' + warnaKategori[kategori] + '"></div>',
+                iconSize: [22, 22],
+                iconAnchor: [11, 22],
+                popupAnchor: [0, -20]
+            });
+
+            var popupTitik =
+                '<table class="popup-table">' +
+                    '<tr><td>Lokasi</td><td>: ' + nama + '</td></tr>' +
+                    '<tr><td>Kecamatan</td><td>: ' + kecamatan + '</td></tr>' +
+                    '<tr><td>Kategori</td><td>: ' + kategori + '</td></tr>' +
+                    '<tr><td>Koordinat</td><td>: ' + lat + ', ' + lng + '</td></tr>' +
+                '</table>';
+
+            L.marker([lat, lng], { icon: iconPin })
+                .bindPopup(popupTitik)
+                .addTo(layerTitik);
+        });
+
+        // 4. Legenda Dinamis (Buka-Tutup)
+        var legDiv = null;
+        var isCollapsed = false;
+        var legend = L.control({ position: "bottomleft" });
+
+        legend.onAdd = function () {
+            legDiv = L.DomUtil.create("div", "legend");
+            L.DomEvent.disableClickPropagation(legDiv);
+            L.DomEvent.disableScrollPropagation(legDiv);
+
+            legDiv.innerHTML =
+                '<div class="legend-head" id="legToggle">' +
+                    '<span>Legenda</span>' +
+                    '<span id="legIcon">−</span>' +
+                '</div>' +
+                '<div class="legend-body" id="legBody"></div>';
+
+            legDiv.querySelector("#legToggle").onclick = function () {
+                isCollapsed = !isCollapsed;
+                legDiv.querySelector("#legBody").classList.toggle("hide", isCollapsed);
+                legDiv.querySelector("#legIcon").textContent = isCollapsed ? "+" : "−";
+            };
+
+            updateLegend();
+            return legDiv;
+        };
+
+        function updateLegend() {
+            if (!legDiv) return;
+            var html = "";
+
+            if (map.hasLayer(layerTitik)) {
+                html += "<h4>Fasilitas Umum</h4>";
+                Object.keys(warnaKategori).forEach(function (kat) {
+                    html +=
+                        '<div class="legend-row">' +
+                            '<span class="dot" style="background:' + warnaKategori[kat] + '"></span>' +
+                            '<span>' + kat + '</span>' +
+                        '</div>';
+                });
+            }
+
+            if (map.hasLayer(wmsKec)) {
+                html +=
+                    '<h4>Batas Kecamatan</h4>' +
+                    '<img src="' + gsUrl + '?REQUEST=GetLegendGraphic&VERSION=1.0.0&FORMAT=image/png&LAYER=pgweb_acara11:batas_kecamatan_flores">';
+            }
+
+            if (map.hasLayer(wmsDesa)) {
+                html +=
+                    '<h4>Batas Desa</h4>' +
+                    '<img src="' + gsUrl + '?REQUEST=GetLegendGraphic&VERSION=1.0.0&FORMAT=image/png&LAYER=pgweb_acara11:batas_desa_flores">';
+            }
+
+            legDiv.style.display = html ? "block" : "none";
+            legDiv.querySelector("#legBody").innerHTML = html;
+        }
+
+        legend.addTo(map);
+        map.on("overlayadd overlayremove", updateLegend);
+
+        // 5. Klik Poligon untuk Menampilkan Nama Kecamatan/Desa & Koordinat
+        var clickMarker = null;
+
+        map.on("click", async function (e) {
+            if (clickMarker) {
+                map.removeLayer(clickMarker);
+            }
+
+            clickMarker = L.marker(e.latlng)
+                .addTo(map)
+                .bindPopup("Memuat...")
+                .openPopup();
+
+            var activeLayers = [];
+            if (map.hasLayer(wmsDesa)) activeLayers.push("pgweb_acara11:batas_desa_flores");
+            if (map.hasLayer(wmsKec)) activeLayers.push("pgweb_acara11:batas_kecamatan_flores");
+
+            var infoAdmin = "";
+
+            if (activeLayers.length > 0) {
+                try {
+                    var bounds = map.getBounds();
+                    var sw = map.options.crs.project(bounds.getSouthWest());
+                    var ne = map.options.crs.project(bounds.getNorthEast());
+                    var bbox = [sw.x, sw.y, ne.x, ne.y].join(",");
+                    var point = map.latLngToContainerPoint(e.latlng, map.getZoom());
+                    var size = map.getSize();
+
+                    var url = gsUrl +
+                        "?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetFeatureInfo" +
+                        "&LAYERS=" + activeLayers.join(",") +
+                        "&QUERY_LAYERS=" + activeLayers.join(",") +
+                        "&STYLES=&BBOX=" + bbox +
+                        "&FEATURE_COUNT=5" +
+                        "&HEIGHT=" + size.y +
+                        "&WIDTH=" + size.x +
+                        "&FORMAT=image/png" +
+                        "&INFO_FORMAT=application/json" +
+                        "&SRS=EPSG:3857" +
+                        "&X=" + Math.round(point.x) +
+                        "&Y=" + Math.round(point.y);
+
+                    var res = await fetch(url);
+                    if (res.ok) {
+                        var data = await res.json();
+                        var namaKec = "";
+                        var namaDesa = "";
+
+                        (data.features || []).forEach(function (f) {
+                            var p = f.properties || {};
+                            var fid = (f.id || "").toLowerCase();
+                            var kec = p.KECAMATAN || p.WADMKC || p.kecamatan || p.NAMOBJ;
+                            var desa = p.DESA || p.KELURAHAN || p.WADMKD || p.desa || p.NAMOBJ;
+
+                            if (fid.includes("desa") && desa) namaDesa = desa;
+                            if (kec) namaKec = kec;
+                        });
+
+                        if (map.hasLayer(wmsKec) && namaKec) {
+                            infoAdmin += "<tr><td>Kecamatan</td><td>: " + namaKec + "</td></tr>";
+                        }
+                        if (map.hasLayer(wmsDesa) && namaDesa) {
+                            infoAdmin += "<tr><td>Desa</td><td>: " + namaDesa + "</td></tr>";
+                        }
+                    }
+                } catch (err) {
+                    console.warn("Gagal mengambil atribut wilayah:", err);
+                }
+            }
+
+            var popupHasil =
+                '<table class="popup-table">' +
+                    infoAdmin +
+                    '<tr><td>Latitude</td><td>: ' + e.latlng.lat.toFixed(6) + '</td></tr>' +
+                    '<tr><td>Longitude</td><td>: ' + e.latlng.lng.toFixed(6) + '</td></tr>' +
+                '</table>';
+
+            clickMarker.setPopupContent(popupHasil);
+        });
+
+        // 6. Layer Control & Skala Peta
+        var baseMaps = {
+            "OpenStreetMap": osm,
+            "Google Satellite": sat
+        };
+
+        var overlayMaps = {
+            "Fasilitas Umum": layerTitik,
+            "Batas Kecamatan": wmsKec,
+            "Batas Desa": wmsDesa
+        };
+
+        L.control.layers(baseMaps, overlayMaps, { collapsed: false }).addTo(map);
+        L.control.scale({ position: "bottomright", imperial: false }).addTo(map);
+    </script>
+
+</body>
+</html>
